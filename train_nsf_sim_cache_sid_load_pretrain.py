@@ -222,8 +222,7 @@ def run(rank, n_gpus, hps):
 
     cache = []
     # for epoch in tqdm.tqdm(range(epoch_str, hps.train.epochs + 1), desc="Training progress", position=1, leave=True):
-    with tqdm.tqdm(total=(hps.total_epoch), desc="Training progress", position=0, leave=True) as pbar:
-        pbar.update(epoch_str)
+    with tqdm.tqdm(total=(hps.total_epoch), desc="Training progress", position=0, leave=True, initial=epoch_str) as pbar:
         for epoch in range(epoch_str, hps.train.epochs + 1):
             pbar.update(1)
             if rank == 0:
