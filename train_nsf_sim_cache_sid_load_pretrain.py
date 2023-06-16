@@ -32,6 +32,7 @@ from data_utils import (
     TextAudioCollate,
     DistributedBucketSampler,
 )
+import tqdm
 
 if hps.version == "v1":
     from infer_pack.models import (
@@ -191,24 +192,18 @@ def run(rank, n_gpus, hps):
         # traceback.print_exc()
         epoch_str = 1
         global_step = 0
-        if hps.pretrainG != "":
-
-            if rank == 0:
-                logger.info("loaded pretrained %s" % (hps.pretrainG))
-            print(
-                net_g.module.load_state_dict(
-                    torch.load(hps.pretrainG, map_location="cpu")["model"]
-                )
-            )  ##测试不加载优化器
-        if hps.pretrainD != "":
-
-            if rank == 0:
-                logger.info("loaded pretrained %s" % (hps.pretrainD))
-            print(
-                net_d.module.load_state_dict(
-                    torch.load(hps.pretrainD, map_location="cpu")["model"]
-                )
+        if rank == 0:
+            logger.info("loaded pretrained %s %s" % (hps.pretrainG, hps.pretrainD))
+        print(
+            net_g.module.load_state_dict(
+                torch.load(hps.pretrainG, map_location="cpu")["model"]
             )
+        )  ##测试不加载优化器
+        print(
+            net_d.module.load_state_dict(
+                torch.load(hps.pretrainD, map_location="cpu")["model"]
+            )
+        )
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
         optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
@@ -220,41 +215,47 @@ def run(rank, n_gpus, hps):
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
     cache = []
-    for epoch in range(epoch_str, hps.train.epochs + 1):
-        if rank == 0:
-            train_and_evaluate(
-                rank,
-                epoch,
-                hps,
-                [net_g, net_d],
-                [optim_g, optim_d],
-                [scheduler_g, scheduler_d],
-                scaler,
-                [train_loader, None],
-                logger,
-                [writer, writer_eval],
-                cache,
-            )
-        else:
-            train_and_evaluate(
-                rank,
-                epoch,
-                hps,
-                [net_g, net_d],
-                [optim_g, optim_d],
-                [scheduler_g, scheduler_d],
-                scaler,
-                [train_loader, None],
-                None,
-                None,
-                cache,
-            )
-        scheduler_g.step()
-        scheduler_d.step()
+    # for epoch in tqdm.tqdm(range(epoch_str, hps.train.epochs + 1), desc="Training progress", position=1, leave=True):
+    with tqdm.tqdm(total=(hps.total_epoch), desc="Training progress", position=0, leave=True) as pbar:
+        pbar.update(epoch_str)
+        for epoch in range(epoch_str, hps.train.epochs + 1):
+            pbar.update(1)
+            if rank == 0:
+                train_and_evaluate(
+                    rank,
+                    epoch,
+                    hps,
+                    [net_g, net_d],
+                    [optim_g, optim_d],
+                    [scheduler_g, scheduler_d],
+                    scaler,
+                    [train_loader, None],
+                    logger,
+                    [writer, writer_eval],
+                    cache,
+                    pbar
+                )
+            else:
+                train_and_evaluate(
+                    rank,
+                    epoch,
+                    hps,
+                    [net_g, net_d],
+                    [optim_g, optim_d],
+                    [scheduler_g, scheduler_d],
+                    scaler,
+                    [train_loader, None],
+                    None,
+                    None,
+                    cache,
+                    pbar
+                )
+            scheduler_g.step()
+            scheduler_d.step()
 
 
 def train_and_evaluate(
-    rank, epoch, hps, nets, optims, schedulers, scaler, loaders, logger, writers, cache
+    rank, epoch, hps, nets, optims, schedulers, scaler, loaders, logger, writers, cache, pbar
 ):
     net_g, net_d = nets
     optim_g, optim_d = optims
@@ -352,171 +353,177 @@ def train_and_evaluate(
 
     # Run steps
     epoch_recorder = EpochRecorder()
-    for batch_idx, info in data_iterator:
-        # Data
-        ## Unpack
-        if hps.if_f0 == 1:
-            (
-                phone,
-                phone_lengths,
-                pitch,
-                pitchf,
-                spec,
-                spec_lengths,
-                wave,
-                wave_lengths,
-                sid,
-            ) = info
-        else:
-            phone, phone_lengths, spec, spec_lengths, wave, wave_lengths, sid = info
-        ## Load on CUDA
-        if (hps.if_cache_data_in_gpu == False) and torch.cuda.is_available():
-            phone = phone.cuda(rank, non_blocking=True)
-            phone_lengths = phone_lengths.cuda(rank, non_blocking=True)
-            if hps.if_f0 == 1:
-                pitch = pitch.cuda(rank, non_blocking=True)
-                pitchf = pitchf.cuda(rank, non_blocking=True)
-            sid = sid.cuda(rank, non_blocking=True)
-            spec = spec.cuda(rank, non_blocking=True)
-            spec_lengths = spec_lengths.cuda(rank, non_blocking=True)
-            wave = wave.cuda(rank, non_blocking=True)
-            # wave_lengths = wave_lengths.cuda(rank, non_blocking=True)
-
-        # Calculate
-        with autocast(enabled=hps.train.fp16_run):
+    # for batch_idx, info in data_iterator:
+    with tqdm.tqdm(total=len(train_loader), desc="Epoch progress", position=rank + 1, leave=True) as piterbar:
+        for batch_idx, info in data_iterator:
+            # Data
+            ## Unpack
             if hps.if_f0 == 1:
                 (
-                    y_hat,
-                    ids_slice,
-                    x_mask,
-                    z_mask,
-                    (z, z_p, m_p, logs_p, m_q, logs_q),
-                ) = net_g(phone, phone_lengths, pitch, pitchf, spec, spec_lengths, sid)
+                    phone,
+                    phone_lengths,
+                    pitch,
+                    pitchf,
+                    spec,
+                    spec_lengths,
+                    wave,
+                    wave_lengths,
+                    sid,
+                ) = info
             else:
-                (
-                    y_hat,
-                    ids_slice,
-                    x_mask,
-                    z_mask,
-                    (z, z_p, m_p, logs_p, m_q, logs_q),
-                ) = net_g(phone, phone_lengths, spec, spec_lengths, sid)
-            mel = spec_to_mel_torch(
-                spec,
-                hps.data.filter_length,
-                hps.data.n_mel_channels,
-                hps.data.sampling_rate,
-                hps.data.mel_fmin,
-                hps.data.mel_fmax,
-            )
-            y_mel = commons.slice_segments(
-                mel, ids_slice, hps.train.segment_size // hps.data.hop_length
-            )
-            with autocast(enabled=False):
-                y_hat_mel = mel_spectrogram_torch(
-                    y_hat.float().squeeze(1),
+                phone, phone_lengths, spec, spec_lengths, wave, wave_lengths, sid = info
+            ## Load on CUDA
+            if (hps.if_cache_data_in_gpu == False) and torch.cuda.is_available():
+                phone = phone.cuda(rank, non_blocking=True)
+                phone_lengths = phone_lengths.cuda(rank, non_blocking=True)
+                if hps.if_f0 == 1:
+                    pitch = pitch.cuda(rank, non_blocking=True)
+                    pitchf = pitchf.cuda(rank, non_blocking=True)
+                sid = sid.cuda(rank, non_blocking=True)
+                spec = spec.cuda(rank, non_blocking=True)
+                spec_lengths = spec_lengths.cuda(rank, non_blocking=True)
+                wave = wave.cuda(rank, non_blocking=True)
+                # wave_lengths = wave_lengths.cuda(rank, non_blocking=True)
+
+            # Calculate
+            with autocast(enabled=hps.train.fp16_run):
+                if hps.if_f0 == 1:
+                    (
+                        y_hat,
+                        ids_slice,
+                        x_mask,
+                        z_mask,
+                        (z, z_p, m_p, logs_p, m_q, logs_q),
+                    ) = net_g(phone, phone_lengths, pitch, pitchf, spec, spec_lengths, sid)
+                else:
+                    (
+                        y_hat,
+                        ids_slice,
+                        x_mask,
+                        z_mask,
+                        (z, z_p, m_p, logs_p, m_q, logs_q),
+                    ) = net_g(phone, phone_lengths, spec, spec_lengths, sid)
+                mel = spec_to_mel_torch(
+                    spec,
                     hps.data.filter_length,
                     hps.data.n_mel_channels,
                     hps.data.sampling_rate,
-                    hps.data.hop_length,
-                    hps.data.win_length,
                     hps.data.mel_fmin,
                     hps.data.mel_fmax,
                 )
-            if hps.train.fp16_run == True:
-                y_hat_mel = y_hat_mel.half()
-            wave = commons.slice_segments(
-                wave, ids_slice * hps.data.hop_length, hps.train.segment_size
-            )  # slice
-
-            # Discriminator
-            y_d_hat_r, y_d_hat_g, _, _ = net_d(wave, y_hat.detach())
-            with autocast(enabled=False):
-                loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
-                    y_d_hat_r, y_d_hat_g
+                y_mel = commons.slice_segments(
+                    mel, ids_slice, hps.train.segment_size // hps.data.hop_length
                 )
-        optim_d.zero_grad()
-        scaler.scale(loss_disc).backward()
-        scaler.unscale_(optim_d)
-        grad_norm_d = commons.clip_grad_value_(net_d.parameters(), None)
-        scaler.step(optim_d)
-
-        with autocast(enabled=hps.train.fp16_run):
-            # Generator
-            y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(wave, y_hat)
-            with autocast(enabled=False):
-                loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel
-                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl
-                loss_fm = feature_loss(fmap_r, fmap_g)
-                loss_gen, losses_gen = generator_loss(y_d_hat_g)
-                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_kl
-        optim_g.zero_grad()
-        scaler.scale(loss_gen_all).backward()
-        scaler.unscale_(optim_g)
-        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), None)
-        scaler.step(optim_g)
-        scaler.update()
-
-        if rank == 0:
-            if global_step % hps.train.log_interval == 0:
-                lr = optim_g.param_groups[0]["lr"]
-                logger.info(
-                    "Train Epoch: {} [{:.0f}%]".format(
-                        epoch, 100.0 * batch_idx / len(train_loader)
+                with autocast(enabled=False):
+                    y_hat_mel = mel_spectrogram_torch(
+                        y_hat.float().squeeze(1),
+                        hps.data.filter_length,
+                        hps.data.n_mel_channels,
+                        hps.data.sampling_rate,
+                        hps.data.hop_length,
+                        hps.data.win_length,
+                        hps.data.mel_fmin,
+                        hps.data.mel_fmax,
                     )
-                )
-                # Amor For Tensorboard display
-                if loss_mel > 75:
-                    loss_mel = 75
-                if loss_kl > 9:
-                    loss_kl = 9
+                if hps.train.fp16_run == True:
+                    y_hat_mel = y_hat_mel.half()
+                wave = commons.slice_segments(
+                    wave, ids_slice * hps.data.hop_length, hps.train.segment_size
+                )  # slice
 
-                logger.info([global_step, lr])
-                logger.info(
-                    f"loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}"
-                )
-                scalar_dict = {
-                    "loss/g/total": loss_gen_all,
-                    "loss/d/total": loss_disc,
-                    "learning_rate": lr,
-                    "grad_norm_d": grad_norm_d,
-                    "grad_norm_g": grad_norm_g,
-                }
-                scalar_dict.update(
-                    {
-                        "loss/g/fm": loss_fm,
-                        "loss/g/mel": loss_mel,
-                        "loss/g/kl": loss_kl,
+                # Discriminator
+                y_d_hat_r, y_d_hat_g, _, _ = net_d(wave, y_hat.detach())
+                with autocast(enabled=False):
+                    loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
+                        y_d_hat_r, y_d_hat_g
+                    )
+            optim_d.zero_grad()
+            scaler.scale(loss_disc).backward()
+            scaler.unscale_(optim_d)
+            grad_norm_d = commons.clip_grad_value_(net_d.parameters(), None)
+            scaler.step(optim_d)
+
+            with autocast(enabled=hps.train.fp16_run):
+                # Generator
+                y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(wave, y_hat)
+                with autocast(enabled=False):
+                    loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel
+                    loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl
+                    loss_fm = feature_loss(fmap_r, fmap_g)
+                    loss_gen, losses_gen = generator_loss(y_d_hat_g)
+                    loss_gen_all = loss_gen + loss_fm + loss_mel + loss_kl
+            optim_g.zero_grad()
+            scaler.scale(loss_gen_all).backward()
+            scaler.unscale_(optim_g)
+            grad_norm_g = commons.clip_grad_value_(net_g.parameters(), None)
+            scaler.step(optim_g)
+            scaler.update()
+
+            if rank == 0:
+                pbar.refresh()
+                piterbar.update(1)
+                piterbar.set_description(f"Epoch GPU:{rank} loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}")
+                if global_step % hps.train.log_interval == 0:
+                    lr = optim_g.param_groups[0]["lr"]
+                    # logger.info(
+                    #     "Train Epoch: {} [{:.0f}%]".format(
+                    #         epoch, 100.0 * batch_idx / len(train_loader)
+                    #     )
+                    # )
+
+                    # Amor For Tensorboard display
+                    if loss_mel > 75:
+                        loss_mel = 75
+                    if loss_kl > 9:
+                        loss_kl = 9
+
+                    # logger.info([global_step, lr])
+                    # logger.info(
+                    #     f"loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}"
+                    # )
+                    scalar_dict = {
+                        "loss/g/total": loss_gen_all,
+                        "loss/d/total": loss_disc,
+                        "learning_rate": lr,
+                        "grad_norm_d": grad_norm_d,
+                        "grad_norm_g": grad_norm_g,
                     }
-                )
+                    scalar_dict.update(
+                        {
+                            "loss/g/fm": loss_fm,
+                            "loss/g/mel": loss_mel,
+                            "loss/g/kl": loss_kl,
+                        }
+                    )
 
-                scalar_dict.update(
-                    {"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)}
-                )
-                scalar_dict.update(
-                    {"loss/d_r/{}".format(i): v for i, v in enumerate(losses_disc_r)}
-                )
-                scalar_dict.update(
-                    {"loss/d_g/{}".format(i): v for i, v in enumerate(losses_disc_g)}
-                )
-                image_dict = {
-                    "slice/mel_org": utils.plot_spectrogram_to_numpy(
-                        y_mel[0].data.cpu().numpy()
-                    ),
-                    "slice/mel_gen": utils.plot_spectrogram_to_numpy(
-                        y_hat_mel[0].data.cpu().numpy()
-                    ),
-                    "all/mel": utils.plot_spectrogram_to_numpy(
-                        mel[0].data.cpu().numpy()
-                    ),
-                }
-                utils.summarize(
-                    writer=writer,
-                    global_step=global_step,
-                    images=image_dict,
-                    scalars=scalar_dict,
-                )
-        global_step += 1
-    # /Run steps
+                    scalar_dict.update(
+                        {"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)}
+                    )
+                    scalar_dict.update(
+                        {"loss/d_r/{}".format(i): v for i, v in enumerate(losses_disc_r)}
+                    )
+                    scalar_dict.update(
+                        {"loss/d_g/{}".format(i): v for i, v in enumerate(losses_disc_g)}
+                    )
+                    image_dict = {
+                        "slice/mel_org": utils.plot_spectrogram_to_numpy(
+                            y_mel[0].data.cpu().numpy()
+                        ),
+                        "slice/mel_gen": utils.plot_spectrogram_to_numpy(
+                            y_hat_mel[0].data.cpu().numpy()
+                        ),
+                        "all/mel": utils.plot_spectrogram_to_numpy(
+                            mel[0].data.cpu().numpy()
+                        ),
+                    }
+                    utils.summarize(
+                        writer=writer,
+                        global_step=global_step,
+                        images=image_dict,
+                        scalars=scalar_dict,
+                    )
+            global_step += 1
+        # /Run steps
 
     if epoch % hps.save_every_epoch == 0 and rank == 0:
         if hps.if_latest == 0:
@@ -554,25 +561,26 @@ def train_and_evaluate(
                 ckpt = net_g.module.state_dict()
             else:
                 ckpt = net_g.state_dict()
-            logger.info(
-                "saving ckpt %s_e%s:%s"
-                % (
-                    hps.name,
-                    epoch,
-                    savee(
-                        ckpt,
-                        hps.sample_rate,
-                        hps.if_f0,
-                        hps.name + "_e%s_s%s" % (epoch, global_step),
-                        epoch,
-                        hps.version,
-                        hps,
-                    ),
-                )
+            s = savee(
+                ckpt,
+                hps.sample_rate,
+                hps.if_f0,
+                hps.name + "_e%s_s%s" % (epoch, global_step),
+                epoch,
+                hps.version,
+                hps,
             )
+            # logger.info(
+            #     "saving ckpt %s_e%s:%s"
+            #     % (
+            #         hps.name,
+            #         epoch,
+            #         s,
+            #     )
+            # )
 
-    if rank == 0:
-        logger.info("====> Epoch: {} {}".format(epoch, epoch_recorder.record()))
+    # if rank == 0:
+    #     logger.info("====> Epoch: {} {}".format(epoch, epoch_recorder.record()))
     if epoch >= hps.total_epoch and rank == 0:
         logger.info("Training is done. The program is closed.")
 
