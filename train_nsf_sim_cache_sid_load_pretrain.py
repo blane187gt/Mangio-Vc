@@ -467,9 +467,9 @@ def train_and_evaluate(
             if rank == 0:
                 pbar.refresh()
                 piterbar.update(1)
-                piterbar.set_description(f"Epoch GPU:{rank} loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}")
+                lr = optim_g.param_groups[0]["lr"]
+                piterbar.set_description(f"GPU:{rank} loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}, iteration{global_step}, lr{'{:.3e}'.format(lr)}, Epoch progress")
                 if global_step % hps.train.log_interval == 0:
-                    lr = optim_g.param_groups[0]["lr"]
                     # logger.info(
                     #     "Train Epoch: {} [{:.0f}%]".format(
                     #         epoch, 100.0 * batch_idx / len(train_loader)
