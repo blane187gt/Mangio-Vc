@@ -185,12 +185,19 @@ def run(rank, n_gpus, hps):
         _, _, _, epoch_str = utils.load_checkpoint(
             utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g
         )
-        global_step = (epoch_str - 1) * len(train_loader)
+
+        scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+            optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
+        )
+        scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
+            optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
+        )
+        
         # epoch_str = 1
         # global_step = 0
     except:  # 如果首次不能加载，加载pretrain
         # traceback.print_exc()
-        epoch_str = 1
+        epoch_str = 0
         global_step = 0
         if hps.pretrainG != "":
 
@@ -210,21 +217,22 @@ def run(rank, n_gpus, hps):
                     torch.load(hps.pretrainD, map_location="cpu")["model"]
                 )
             )
+            scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
+                optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1
+            )
+            scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
+                optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1
+            )
+    global_step = epoch_str * len(train_loader)
 
-    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
-    )
-    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
-    )
+    
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
     cache = []
     # for epoch in tqdm.tqdm(range(epoch_str, hps.train.epochs + 1), desc="Training progress", position=1, leave=True):
-    with tqdm.tqdm(total=(hps.total_epoch), desc="Training progress", position=0, leave=True, initial=epoch_str) as pbar:
-        for epoch in range(epoch_str, hps.train.epochs + 1):
-            pbar.update(1)
+    with tqdm.tqdm(total=(hps.total_epoch), desc=f"Training progress, last ckpt saved at epoch: {epoch_str}", position=0, leave=True, initial=0 if global_step == 0 else epoch_str, dynamic_ncols=True) as pbar:
+        for epoch in range(epoch_str + 1, hps.train.epochs + 1):
             if rank == 0:
                 train_and_evaluate(
                     rank,
@@ -255,6 +263,7 @@ def run(rank, n_gpus, hps):
                     cache,
                     pbar
                 )
+            pbar.update(1)
             scheduler_g.step()
             scheduler_d.step()
 
@@ -359,7 +368,7 @@ def train_and_evaluate(
     # Run steps
     epoch_recorder = EpochRecorder()
     # for batch_idx, info in data_iterator:
-    with tqdm.tqdm(total=len(train_loader), desc="Epoch progress", position=rank + 1, leave=True) as piterbar:
+    with tqdm.tqdm(total=len(train_loader), desc="Epoch progress", position=rank + 1, leave=True, dynamic_ncols=True) as piterbar:
         for batch_idx, info in data_iterator:
             # Data
             ## Unpack
@@ -468,7 +477,7 @@ def train_and_evaluate(
                 pbar.refresh()
                 piterbar.update(1)
                 lr = optim_g.param_groups[0]["lr"]
-                piterbar.set_description(f"GPU:{rank} loss_disc={loss_disc:.3f}, loss_gen={loss_gen:.3f}, loss_fm={loss_fm:.3f},loss_mel={loss_mel:.3f}, loss_kl={loss_kl:.3f}, iteration{global_step}, lr{'{:.3e}'.format(lr)}, Epoch progress")
+                piterbar.set_description(f"GPU{rank} l_disc={loss_disc:.3f}, l_gen={loss_gen:.3f}, l_fm={loss_fm:.3f}, l_mel={loss_mel:.3f}, l_kl={loss_kl:.3f}, iter={global_step}, lr{'{:.3e}'.format(lr)}")
                 if global_step % hps.train.log_interval == 0:
                     # logger.info(
                     #     "Train Epoch: {} [{:.0f}%]".format(
@@ -561,6 +570,7 @@ def train_and_evaluate(
                 epoch,
                 os.path.join(hps.model_dir, "D_{}.pth".format(2333333)),
             )
+        pbar.set_description(f"Training progress, last ckpt saved at epoch {epoch}")
         if rank == 0 and hps.save_every_weights == "1":
             if hasattr(net_g, "module"):
                 ckpt = net_g.module.state_dict()
