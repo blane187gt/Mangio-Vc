@@ -98,9 +98,7 @@ def run(rank, n_gpus, hps):
         writer = SummaryWriter(log_dir=hps.model_dir)
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
-    dist.init_process_group(
-        backend="gloo", init_method="env://", world_size=n_gpus, rank=rank
-    )
+    dist.init_process_group(backend="gloo", init_method="env://", world_size=n_gpus, rank=rank)
     torch.manual_seed(hps.train.seed)
     if torch.cuda.is_available():
         torch.cuda.set_device(rank)
@@ -176,23 +174,15 @@ def run(rank, n_gpus, hps):
         net_d = DDP(net_d)
 
     try:  # 如果能加载自动resume
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d
-        )  # D多半加载没事
+        _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d)  # D多半加载没事
         if rank == 0:
             logger.info("loaded D")
         # _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g,load_opt=0)
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g
-        )
+        _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
 
-        scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-            optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
-        )
-        scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-            optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2
-        )
-        
+        scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
+        scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 2)
+
         # epoch_str = 1
         # global_step = 0
     except:  # 如果首次不能加载，加载pretrain
@@ -200,69 +190,39 @@ def run(rank, n_gpus, hps):
         epoch_str = 0
         global_step = 0
         if hps.pretrainG != "":
-
             if rank == 0:
                 logger.info("loaded pretrained %s" % (hps.pretrainG))
-            print(
-                net_g.module.load_state_dict(
-                    torch.load(hps.pretrainG, map_location="cpu")["model"]
-                )
-            )  ##测试不加载优化器
+            print(net_g.module.load_state_dict(torch.load(hps.pretrainG, map_location="cpu")["model"]))  ##测试不加载优化器
         if hps.pretrainD != "":
-
             if rank == 0:
                 logger.info("loaded pretrained %s" % (hps.pretrainD))
-            print(
-                net_d.module.load_state_dict(
-                    torch.load(hps.pretrainD, map_location="cpu")["model"]
-                )
-            )
-            scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-                optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1
-            )
-            scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-                optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1
-            )
+            print(net_d.module.load_state_dict(torch.load(hps.pretrainD, map_location="cpu")["model"]))
+            scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1)
+            scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str - 1)
     global_step = epoch_str * len(train_loader)
-
-    
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
     cache = []
     # for epoch in tqdm.tqdm(range(epoch_str, hps.train.epochs + 1), desc="Training progress", position=1, leave=True):
-    with tqdm.tqdm(total=(hps.total_epoch), desc=f"Training progress, last ckpt saved at epoch: {epoch_str}", position=0, leave=True, initial=0 if global_step == 0 else epoch_str, dynamic_ncols=True) as pbar:
+
+    # disable if rank is not 0 to avoid duplicate main progress bars on each process
+    with tqdm.tqdm(
+        total=(hps.total_epoch),
+        desc=f"Training progress, last ckpt saved at epoch: {epoch_str}",
+        position=0,
+        leave=True,
+        initial=0 if global_step == 0 else epoch_str,
+        dynamic_ncols=True,
+        disable=(rank != 0),
+    ) as pbar:
         for epoch in range(epoch_str + 1, hps.train.epochs + 1):
             if rank == 0:
                 train_and_evaluate(
-                    rank,
-                    epoch,
-                    hps,
-                    [net_g, net_d],
-                    [optim_g, optim_d],
-                    [scheduler_g, scheduler_d],
-                    scaler,
-                    [train_loader, None],
-                    logger,
-                    [writer, writer_eval],
-                    cache,
-                    pbar
+                    rank, epoch, hps, [net_g, net_d], [optim_g, optim_d], [scheduler_g, scheduler_d], scaler, [train_loader, None], logger, [writer, writer_eval], cache, pbar
                 )
             else:
-                train_and_evaluate(
-                    rank,
-                    epoch,
-                    hps,
-                    [net_g, net_d],
-                    [optim_g, optim_d],
-                    [scheduler_g, scheduler_d],
-                    scaler,
-                    [train_loader, None],
-                    None,
-                    None,
-                    cache,
-                    pbar
-                )
+                train_and_evaluate(rank, epoch, hps, [net_g, net_d], [optim_g, optim_d], [scheduler_g, scheduler_d], scaler, [train_loader, None], None, None, cache, pbar)
             pbar.update(1)
             scheduler_g.step()
             scheduler_d.step()
@@ -540,36 +500,25 @@ def train_and_evaluate(
         # /Run steps
 
     if epoch % hps.save_every_epoch == 0 and rank == 0:
-        if hps.if_latest == 0:
-            utils.save_checkpoint(
-                net_g,
-                optim_g,
-                hps.train.learning_rate,
-                epoch,
-                os.path.join(hps.model_dir, "G_{}.pth".format(global_step)),
-            )
-            utils.save_checkpoint(
-                net_d,
-                optim_d,
-                hps.train.learning_rate,
-                epoch,
-                os.path.join(hps.model_dir, "D_{}.pth".format(global_step)),
-            )
-        else:
-            utils.save_checkpoint(
-                net_g,
-                optim_g,
-                hps.train.learning_rate,
-                epoch,
-                os.path.join(hps.model_dir, "G_{}.pth".format(2333333)),
-            )
-            utils.save_checkpoint(
-                net_d,
-                optim_d,
-                hps.train.learning_rate,
-                epoch,
-                os.path.join(hps.model_dir, "D_{}.pth".format(2333333)),
-            )
+        utils.save_checkpoint(
+            net_g,
+            optim_g,
+            hps.train.learning_rate,
+            epoch,
+            hps.model_dir,
+            "G_{}.pth".format(global_step),
+            True if hps.if_latest == 1 else False,
+        )
+        utils.save_checkpoint(
+            net_d,
+            optim_d,
+            hps.train.learning_rate,
+            epoch,
+            hps.model_dir,
+            "D_{}.pth".format(global_step),
+            True if hps.if_latest == 1 else False,
+        )
+
         pbar.set_description(f"Training progress, last ckpt saved at epoch {epoch}")
         if rank == 0 and hps.save_every_weights == "1":
             if hasattr(net_g, "module"):
@@ -603,14 +552,7 @@ def train_and_evaluate(
             ckpt = net_g.module.state_dict()
         else:
             ckpt = net_g.state_dict()
-        logger.info(
-            "saving final ckpt:%s"
-            % (
-                savee(
-                    ckpt, hps.sample_rate, hps.if_f0, hps.name, epoch, hps.version, hps
-                )
-            )
-        )
+        logger.info("saving final ckpt:%s" % (savee(ckpt, hps.sample_rate, hps.if_f0, hps.name, epoch, hps.version, hps)))
         sleep(1)
         os._exit(2333333)
 
