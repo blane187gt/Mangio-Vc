@@ -56,7 +56,7 @@ torch.manual_seed(114514)
 
 
 config = Config()
-i18n = I18nAuto()
+i18n = I18nAuto(language=config.language)
 i18n.print()
 # 判断是否有能用来训练和加速推理的N卡
 ngpu = torch.cuda.device_count()

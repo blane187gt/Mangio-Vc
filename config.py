@@ -30,6 +30,7 @@ class Config:
             self.noautoopen,
             self.paperspace,
             self.is_cli,
+            self.language,
         ) = self.arg_parse()
         
         self.x_pad, self.x_query, self.x_center, self.x_max = self.device_config()
@@ -56,6 +57,9 @@ class Config:
         parser.add_argument( # Fork Feature. Embed a CLI into the infer-web.py
             "--is_cli", action="store_true", help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!"
         )
+        parser.add_argument( # fork feature for language support. :3
+            "--language", type=str, default="en-US", help="Language setting for the web interface."
+        )
         cmd_opts = parser.parse_args()
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
@@ -68,6 +72,7 @@ class Config:
             cmd_opts.noautoopen,
             cmd_opts.paperspace,
             cmd_opts.is_cli,
+            cmd_opts.language,
         )
 
     def device_config(self) -> tuple:
