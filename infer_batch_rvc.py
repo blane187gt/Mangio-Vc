@@ -8,6 +8,8 @@ import os, sys, pdb, torch
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
+import argparse
+import glob
 import sys
 import torch
 import tqdm as tq
@@ -100,7 +102,7 @@ opt_path = sys.argv[5]
 model_path = sys.argv[6]
 index_rate = float(sys.argv[7])
 device = sys.argv[8]
-is_half = sys.argv[9].lower() != "false"
+is_half = bool(sys.argv[9])
 filter_radius = int(sys.argv[10])
 resample_sr = int(sys.argv[11])
 rms_mix_rate = float(sys.argv[12])
@@ -110,7 +112,7 @@ config = Config(device, is_half)
 now_dir = os.getcwd()
 sys.path.append(now_dir)
 from vc_infer_pipeline import VC
-from lib.infer_pack.models import (
+from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
     SynthesizerTrnMs768NSFsid,

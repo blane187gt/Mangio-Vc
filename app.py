@@ -1,3 +1,4 @@
+import io
 import os
 import torch
 
@@ -5,12 +6,14 @@ import torch
 import gradio as gr
 import librosa
 import numpy as np
+import soundfile
 import logging
 from fairseq import checkpoint_utils
+from my_utils import load_audio
 from vc_infer_pipeline import VC
 import traceback
 from config import Config
-from lib.infer_pack.models import (
+from infer_pack.models import (
     SynthesizerTrnMs256NSFsid,
     SynthesizerTrnMs256NSFsid_nono,
     SynthesizerTrnMs768NSFsid,

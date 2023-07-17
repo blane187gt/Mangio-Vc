@@ -1,12 +1,9 @@
 import os, sys, traceback
 
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
-
 # device=sys.argv[1]
 n_part = int(sys.argv[2])
 i_part = int(sys.argv[3])
-if len(sys.argv) == 6:
+if len(sys.argv) == 5:
     exp_dir = sys.argv[4]
     version = sys.argv[5]
 else:
@@ -20,11 +17,14 @@ import soundfile as sf
 import numpy as np
 from fairseq import checkpoint_utils
 
-device = "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 if torch.cuda.is_available():
     device = "cuda"
 elif torch.backends.mps.is_available():
     device = "mps"
+else:
+    device = "cpu"
 
 f = open("%s/extract_f0_feature.log" % exp_dir, "a+")
 
@@ -117,7 +117,7 @@ else:
                 else:
                     printt("%s-contains nan" % file)
                 if idx % n == 0:
-                    printt("now-%s,all-%s,%s,%s" % (len(todo), idx, file, feats.shape))
+                    printt("now-%s,all-%s,%s,%s" % (idx, len(todo), file, feats.shape))
         except:
             printt(traceback.format_exc())
     printt("all-feature-done")
