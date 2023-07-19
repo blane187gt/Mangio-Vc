@@ -1344,7 +1344,7 @@ def cli_infer(com):
     protection_amnt = float(com[12])
 
     print("Mangio-RVC-Fork Infer-CLI: Starting the inference...")
-    vc_data = get_vc(model_name)
+    vc_data = get_vc(model_name, protection_amnt, protection_amnt)
     print(vc_data)
     print("Mangio-RVC-Fork Infer-CLI: Performing inference...")
     conversion_data = vc_single(
