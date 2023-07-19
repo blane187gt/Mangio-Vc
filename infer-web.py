@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import argparse
 
 import json # Mangio fork using json for preset saving
 
@@ -1470,6 +1471,7 @@ def cli_extract_model(com):
     has_pitch_guidance = com[3]
     info = com[4]
     version = com[5]
+    # FIXME: Line 72. `opt["weight"][key] = ckpt[key].half() -> 'dict' object has no attribute 'half'`
     extract_small_model_process = extract_small_model(
         model_path,
         save_name,
@@ -1603,6 +1605,89 @@ if(config.is_cli):
     print("\n\nMangio-RVC-Fork v2 CLI App!\n")
     print("Welcome to the CLI version of RVC. Please read the documentation on https://github.com/Mangio621/Mangio-RVC-Fork (README.MD) to understand how to use this app.\n")
     cli_navigation_loop()
+
+#endregion
+
+#region Simple CLI App
+
+def simple_cli_main():
+    print(f"You're now in {config.simple_cli} mode.")
+    command = ""
+    func = None
+    if config.simple_cli and config.simple_cli_args.cmd_help:
+        # TODO: Add help and example for each command
+        print(f"Help for {config.simple_cli} command: WIP\n")
+        return
+    if config.simple_cli == "infer":
+        command = f"{config.simple_cli_args.model_file_name} \
+                    {config.simple_cli_args.source_audio_path} \
+                    {config.simple_cli_args.output_file_name} \
+                    {config.simple_cli_args.feature_index_path} \
+                    {config.simple_cli_args.speaker_id} \
+                    {config.simple_cli_args.transposition} \
+                    {config.simple_cli_args.infer_f0_method} \
+                    {config.simple_cli_args.crepe_hop_length} \
+                    {config.simple_cli_args.harvest_median_filter_radius} \
+                    {config.simple_cli_args.post_sample_rate} \
+                    {config.simple_cli_args.mix_volume_envelope} \
+                    {config.simple_cli_args.feature_index_ratio} \
+                    {config.simple_cli_args.voiceless_consonant_protection}"
+        func = cli_infer
+    elif config.simple_cli == "pre-process":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.trainset_dir} \
+                    {config.simple_cli_args.sample_rate} \
+                    {config.simple_cli_args.n_workers}"
+        func = cli_pre_process
+    elif config.simple_cli == "extract-feature":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.gpu} \
+                    {config.simple_cli_args.n_workers} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.f0_method} \
+                    {config.simple_cli_args.crepe_hop_length} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_extract_feature
+    elif config.simple_cli == "train":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.sample_rate} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.speaker_id} \
+                    {config.simple_cli_args.save_epoch_iter} \
+                    {config.simple_cli_args.epochs} \
+                    {config.simple_cli_args.batch_size} \
+                    {config.simple_cli_args.gpu} \
+                    {int(config.simple_cli_args.latest_ckpt_only)} \
+                    {int(config.simple_cli_args.cache_trainset)} \
+                    {int(config.simple_cli_args.save_small_model)} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_train
+    elif config.simple_cli == "train-feature":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_train_feature
+    elif config.simple_cli == "extract-model":
+        command = f"{config.simple_cli_args.model_path} \
+                    {config.simple_cli_args.model_save_name} \
+                    {config.simple_cli_args.sample_rate} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.model_info} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_extract_model
+    else:
+        raise Exception("Unknown simple cli mode: %s" % config.simple_cli)
+    
+    if command == "":
+        raise Exception("Fatal Error. Command is empty.")
+    if func == None:
+        raise Exception("Fatal Error. Function is empty.")
+    
+    func(command)
+
+if(config.simple_cli != ""):
+    print("Hi! It's simple cli here.")
+    simple_cli_main()
+    sys.exit(0)
 
 #endregion
 
