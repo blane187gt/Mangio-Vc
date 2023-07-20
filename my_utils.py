@@ -1,3 +1,4 @@
+import os
 import ffmpeg
 import numpy as np
 
@@ -19,3 +20,6 @@ def load_audio(file, sr):
         raise RuntimeError(f"Failed to load audio: {e}")
 
     return np.frombuffer(out, np.float32).flatten()
+
+def get_folder_name(path):
+    return os.path.basename(os.path.normpath(path)) if '.' not in os.path.basename(os.path.normpath(path)) else ValueError("The path is not a directory path")

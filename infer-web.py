@@ -37,7 +37,7 @@ from lib.infer_pack.models import (
 from lib.infer_pack.models_onnx import SynthesizerTrnMsNSFsidM
 from infer_uvr5 import _audio_pre_, _audio_pre_new
 from MDXNet import MDXNetDereverb
-from my_utils import load_audio
+from my_utils import load_audio, get_folder_name
 from train.process_ckpt import change_info, extract_small_model, merge, show_info
 from vc_infer_pipeline import VC
 from sklearn.cluster import MiniBatchKMeans
@@ -321,6 +321,7 @@ def vc_multi(
             yield "\n".join(infos)
         yield "\n".join(infos)
     except:
+        traceback.print_exc()
         yield traceback.format_exc()
 
 
@@ -1348,28 +1349,60 @@ def cli_infer(com):
     vc_data = get_vc(model_name, protection_amnt, protection_amnt)
     print(vc_data)
     print("Mangio-RVC-Fork Infer-CLI: Performing inference...")
-    conversion_data = vc_single(
-        speaker_id,
-        source_audio_path,
-        transposition,
-        f0_file,
-        f0_method,
-        feature_index_path,
-        feature_index_path,
-        feature_ratio,
-        harvest_median_filter,
-        resample,
-        mix,
-        protection_amnt,
-        crepe_hop_length,        
-    )
-    if "Success." in conversion_data[0]:
-        print("Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s/%s..." % ('audio-outputs', output_file_name))
-        wavfile.write('%s/%s' % ('audio-outputs', output_file_name), conversion_data[1][0], conversion_data[1][1])
-        print("Mangio-RVC-Fork Infer-CLI: Finished! Saved output to %s/%s" % ('audio-outputs', output_file_name))
+    # Check if source_audio_path is a folder, if so, use vc_multi instead.
+    if os.path.isdir(source_audio_path):
+        opt_root = os.path.abspath("multi-audio-outputs/")
+        # Get the folder name of source_audio_path
+        source_audio_path_folder_name = get_folder_name(source_audio_path)
+        opt_root = os.path.join(opt_root, source_audio_path_folder_name)
+        os.makedirs(opt_root, exist_ok=True)
+        for res in vc_multi(
+            sid=speaker_id,
+            dir_path=source_audio_path,
+            opt_root=opt_root,
+            paths=None,
+            f0_up_key=transposition,
+            f0_method=f0_method,
+            file_index=feature_index_path,
+            file_index2=feature_index_path,
+            index_rate=feature_ratio,
+            filter_radius=harvest_median_filter,
+            resample_sr=resample,
+            rms_mix_rate=mix,
+            protect=protection_amnt,
+            format1="flac",
+            crepe_hop_length=crepe_hop_length,
+        ):
+            if "Success." in res:
+                print("Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s" % opt_root)
+            else:
+                print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
+                print(res)
     else:
-        print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
-        print(conversion_data[0])
+        print("Mangio-RVC-Fork Infer-CLI: Detected file. Using vc_single...")
+        conversion_data = vc_single(
+            sid=speaker_id,
+            path=source_audio_path,
+            f0_up_key=transposition,
+            f0_file=f0_file,
+            f0_method=f0_method,
+            file_index=feature_index_path,
+            file_index2=feature_index_path,
+            index_rate=feature_ratio,
+            filter_radius=harvest_median_filter,
+            resample_sr=resample,
+            rms_mix_rate=mix,
+            protect=protection_amnt,
+            crepe_hop_length=crepe_hop_length,
+        )
+
+        if "Success." in conversion_data[0]:
+            print("Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s/%s..." % ('audio-outputs', output_file_name))
+            wavfile.write('%s/%s' % ('audio-outputs', output_file_name), conversion_data[1][0], conversion_data[1][1])
+            print("Mangio-RVC-Fork Infer-CLI: Finished! Saved output to %s/%s" % ('audio-outputs', output_file_name))
+        else:
+            print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
+            print(conversion_data[0])
 
 def cli_pre_process(com):
     com = cli_split_command(com)
