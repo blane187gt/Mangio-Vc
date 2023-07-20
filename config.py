@@ -60,7 +60,7 @@ class Config:
             "--is_cli", action="store_true", help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!"
         )
         parser.add_argument( # Fork Feature. Embed a CLI into the infer-web.py
-            "--simple_cli", choices=["infer", "pre-process", "extract-feature", "train", "train-feature", "extract-model", ""], default="", help="Use the simpler CLI instead of the cli interface. Choose from 1) pre-process 2) extract-feature 3)  WIP."
+            "--simple_cli", choices=["infer", "pre-process", "extract-feature", "train", "train-feature", "extract-model", "uvr", ""], default="", help="Use the simpler CLI instead of the cli interface. Choose from 1) pre-process 2) extract-feature 3)  WIP."
         )
 
         # Arguments for simple cli usage.
@@ -232,6 +232,26 @@ class Config:
             action="store_true",
             help="Print help for simple cli",
         )
+        # Add --agg and --format
+        parser.add_argument(
+            "--agg",
+            type=int,
+            default=10,
+            help="Aggregation for uvr5",
+        )
+        parser.add_argument(
+            "--format",
+            type=str,
+            default="flac",
+            help="Audio format",
+        )
+        parser.add_argument(
+            "--uvr5_weight_name",
+            type=str,
+            default="",
+            help="UVR5 weight name",
+        )
+
 
         cmd_opts = parser.parse_args()
 
@@ -243,7 +263,8 @@ class Config:
                   'feature_index_path', 'transposition', 'infer_f0_method',
                   'harvest_median_filter_radius', 'post_sample_rate',
                   'mix_volume_envelope', 'feature_index_ratio',
-                  'voiceless_consonant_protection', 'model_path', 'model_save_name', 'model_info', 'cmd_help']
+                  'voiceless_consonant_protection', 'model_path', 
+                  'model_save_name', 'model_info', 'cmd_help', 'agg', 'format', 'uvr5_weight_name']
         simple_cli_args = argparse.Namespace(**{arg: getattr(cmd_opts, arg) for arg in args_to_assign})
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865

@@ -143,6 +143,8 @@ def load_hubert():
 
 weight_root = "weights"
 weight_uvr5_root = "uvr5_weights"
+uvr5_vocal_root = os.path.join("uvr5_outputs", "vocal")
+uvr5_inst_root = os.path.join("uvr5_outputs", "inst")
 index_root = "logs"
 names = []
 for name in os.listdir(weight_root):
@@ -348,9 +350,8 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         if inp_root != "":
             paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
         else:
-            paths = [path.name for path in paths]
-        for path in paths:
-            inp_path = os.path.join(inp_root, path)
+            paths = [os.path.join(inp_root, path.name) for path in paths]
+        for inp_path in paths:
             need_reformat = 1
             done = 0
             try:
@@ -1519,6 +1520,23 @@ def cli_extract_model(com):
         print(str(extract_small_model_process))        
         print("Mangio-RVC-Fork Extract Small Model: Failed!")
 
+def cli_uvr(com):
+    com = cli_split_command(com)
+    print("Mangio-RVC-Fork UVR: Starting... Please wait")
+    for res in uvr(
+        model_name=com[0],
+        inp_root=com[1],
+        save_root_vocal=uvr5_vocal_root,
+        paths=None,
+        save_root_ins=uvr5_inst_root,
+        agg=com[2],
+        format0=com[3],
+    ):
+        if "Success" in res:
+            print("Mangio-RVC-Fork UVR: Success!")
+        else:
+            print(f"Mangio-RVC-Fork UVR: Failed! Please check: {res}")
+
 def print_page_details():
     if cli_current_page == "HOME":
         print("    go home            : Takes you back to home with a navigation list.")
@@ -1707,6 +1725,12 @@ def simple_cli_main():
                     {config.simple_cli_args.model_info} \
                     {config.simple_cli_args.rvc_version}"
         func = cli_extract_model
+    elif config.simple_cli == "uvr":
+        command = f"{config.simple_cli_args.uvr5_weight_name} \
+                    {config.simple_cli_args.source_audio_path} \
+                    {config.simple_cli_args.agg} \
+                    {config.simple_cli_args.format}"
+        func = cli_uvr
     else:
         raise Exception("Unknown simple cli mode: %s" % config.simple_cli)
     
