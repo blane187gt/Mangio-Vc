@@ -348,7 +348,10 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                 is_half=config.is_half,
             )
         if inp_root != "":
-            paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
+            if os.path.isdir(inp_root):
+                paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
+            else:
+                paths = [inp_root]
         else:
             paths = [os.path.join(inp_root, path.name) for path in paths]
         for inp_path in paths:
@@ -1383,7 +1386,7 @@ def cli_infer(com):
         print("Mangio-RVC-Fork Infer-CLI: Detected file. Using vc_single...")
         conversion_data = vc_single(
             sid=speaker_id,
-            path=source_audio_path,
+            input_audio_path=source_audio_path,
             f0_up_key=transposition,
             f0_file=f0_file,
             f0_method=f0_method,
