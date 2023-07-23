@@ -8,7 +8,7 @@ install: ## Install dependencies (Do everytime you start up a paperspace machine
 	apt-get -y install build-essential python3-dev ffmpeg
 	pip install --upgrade setuptools wheel
 	pip install --upgrade pip
-	pip install faiss-gpu fairseq gradio==3.23 ffmpeg ffmpeg-python praat-parselmouth pyworld==0.3.2 numpy==1.23.5 numba==0.56.4 librosa==0.9.1
+	pip install faiss-gpu fairseq gradio==3.34 ffmpeg ffmpeg-python praat-parselmouth pyworld==0.3.2 numpy==1.23.5 numba==0.56.4 librosa==0.9.1
 	pip install -r requirements.txt
 	pip install --upgrade lxml
 	apt-get update
