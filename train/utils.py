@@ -395,6 +395,7 @@ def get_hparams(init=True):
     hparams.if_cache_data_in_gpu = args.if_cache_data_in_gpu
     hparams.data.training_files = "%s/filelist.txt" % experiment_dir
 
+    args.log_interval += 1
     hparams.train.log_interval = args.log_interval
 
     # Update log_interval in the 'train' section of the config dictionary
