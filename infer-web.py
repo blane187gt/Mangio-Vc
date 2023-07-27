@@ -44,6 +44,12 @@ from vc_infer_pipeline import VC
 from sklearn.cluster import MiniBatchKMeans
 
 import sqlite3
+import tensorlowest
+
+from os import listdir, makedirs
+from os.path import isfile, join, exists, isdir
+
+from shutil import copy2
 
 def clear_sql(signal, frame):
     cursor.execute("DELETE FROM formant_data")
@@ -972,6 +978,7 @@ def set_log_interval(exp_dir, batch_size12):
 
     return log_interval
 
+ds = {}
 
 # but3.click(click_train,[exp_dir1,sr2,if_f0_3,save_epoch10,total_epoch11,batch_size12,if_save_latest13,pretrained_G14,pretrained_D15,gpus16])
 def click_train(
@@ -1965,7 +1972,16 @@ def whethercrepeornah(radio):
     
     return ({"visible": mango, "__type__": "update"})
 
+tab_faq = i18n("常见问题解答")
+faq_file = "docs/faq.md" if tab_faq == "常见问题解答" else "docs/faq_en.md"
 
+weights_dir = 'weights/'
+
+def mdltensordir(model_name, lowestval_dir):
+    tensordir = f'logs/{model_name}/'
+    lowestval_dir = join(tensordir, "lowestvals")
+    return lowestval_dir
+    
 #Change your Gradio Theme here. 👇 👇 👇 👇 Example: " theme='HaleyCH/HaleyCH_Theme' "
 with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
     gr.HTML("<h1> The Mangio-RVC-Fork 💻 </h1>")
@@ -2618,7 +2634,52 @@ with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
                     #    ],
                     #    info3,
                     #)
+            with gr.Group():
+
+                gr.Markdown(value='Step 4: Export lowest points on a graph of the model')
+                gr.Markdown(value='After clicking on Export lowest points of a model,')
+                gr.Markdown(value='The new files will be located in logs/[yourmodelname]/lowestvals/ folder')
                 
+                with gr.Row():
+                    with gr.Accordion(label='Lowest points export'):
+                    
+                        lowestval_weight_dir = gr.Textbox(visible=False)
+                        ds = gr.Textbox(visible=False)
+                        weights_dir1 = gr.Textbox(visible=False, value=weights_dir)
+                        
+                            
+                        with gr.Row():
+                            amntlastmdls = gr.Slider(
+                                minimum=1,
+                                maximum=25,
+                                label='How many lowest points to save',
+                                value=3,
+                                step=1,
+                                interactive=True,
+                            )
+                            lpexport = gr.Button(
+                                value='Export lowest points of a model',
+                                variant='primary',
+                            )
+                            
+                        with gr.Row():
+                            infolpex = gr.Textbox(label="Output information:", value="", max_lines=10)
+                        
+                        lpexport.click(
+                            lambda model_name: join("logs", model_name, "lowestvals"),
+                            inputs=[exp_dir1],
+                            outputs=[lowestval_weight_dir]
+                        )
+                        
+                        lpexport.click(fn=tensorlowest.main, inputs=[exp_dir1, save_epoch10, amntlastmdls], outputs=[ds])
+                        
+                        ds.change(
+                            fn=tensorlowest.selectweights,
+                            inputs=[exp_dir1, ds, weights_dir1, lowestval_weight_dir],
+                            outputs=[infolpex],
+                        )
+            
+            
         with gr.TabItem(i18n("ckpt处理")):
             with gr.Group():
                 gr.Markdown(value=i18n("模型融合, 可用于测试音色融合"))
@@ -2767,15 +2828,10 @@ with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
                 butOnnx = gr.Button(i18n("导出Onnx模型"), variant="primary")
             butOnnx.click(export_onnx, [ckpt_dir, onnx_dir], infoOnnx)
 
-        tab_faq = i18n("常见问题解答")
         with gr.TabItem(tab_faq):
             try:
-                if tab_faq == "常见问题解答":
-                    with open("docs/faq.md", "r", encoding="utf8") as f:
-                        info = f.read()
-                else:
-                    with open("docs/faq_en.md", "r", encoding="utf8") as f:
-                        info = f.read()
+                with open(faq_file, "r", encoding="utf8") as f:
+                    info = f.read()
                 gr.Markdown(value=info)
             except:
                 gr.Markdown(traceback.format_exc())
