@@ -103,7 +103,6 @@ torch.manual_seed(114514)
 
 global DoFormant, Quefrency, Timbre
 
-
 try:
     cursor.execute("SELECT Quefrency, Timbre, DoFormant FROM formant_data")
     Quefrency, Timbre, DoFormant = cursor.fetchone()
@@ -114,7 +113,8 @@ except Exception:
     DoFormant = False
     cursor.execute("DELETE FROM formant_data")
     cursor.execute("DELETE FROM stop_train")
-    cursor.execute("INSERT INTO formant_data (Quefrency, Timbre, DoFormant) VALUES (?, ?, ?)", (Quefrency, Timbre, 0))
+    conn.commit()
+    cursor.execute("INSERT INTO formant_data (Quefrency, Timbre, DoFormant) VALUES (?, ?, ?)", (Quefrency, Timbre, int(DoFormant)))
     conn.commit()
     
 config = Config()
@@ -263,8 +263,6 @@ def get_fshift_presets():
         return fshift_presets_list
     else:
         return ''
-
-
 
 def vc_single(
     sid,
@@ -516,7 +514,6 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
     yield "\n".join(infos)
-
 
 # 一个选项卡全局只能有一个音色
 def get_vc(sid, to_return_protect0, to_return_protect1):
