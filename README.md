@@ -1,3 +1,8 @@
+# 7/29 Changelog:
+- Completely rewrote the code for `infer-web.py` to be more optimized.
+- Added minor optimizations in `my_utils.py`.
+- Due to all that, inferencing works up to 25% faster, training works up to 20-30% faster.
+- Revoked from using **SQL** databases back to **CSV** data storage for less trouble on colab.
 # 7/26 Changelog:
 - Fixed the cli inferencing traceback.
 - SQL Databases implemented for formanting training stop.
