@@ -172,10 +172,8 @@ class Slicer:
                 chunks.append(
                     self._apply_slice(waveform, sil_tags[i][1], sil_tags[i + 1][0])
                 )
-            if sil_tags[-1][1] < total_frames:
-                chunks.append(
-                    self._apply_slice(waveform, sil_tags[-1][1], total_frames)
-                )
+            if sil_tags[-1][1] < total_frames and (total_frames - sil_tags[-1][1] * self.hop_size) >= self.min_length:
+                chunks.append(self._apply_slice(waveform, sil_tags[-1][1], total_frames))
             return chunks
 
 
