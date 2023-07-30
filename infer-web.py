@@ -1732,8 +1732,8 @@ with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
                     )
                     if_f0_3.change(
                             fn=change_f0,
-                            inputs=[if_f0_3, sr2, version19, step2b],
-                            outputs=[f0method8, pretrained_G14, pretrained_D15, step2b],
+                            inputs=[if_f0_3, sr2, version19],
+                            outputs=[f0method8, pretrained_G14, pretrained_D15],
                     )
                     if_f0_3.change(fn=lambda radio: (
                                 {
