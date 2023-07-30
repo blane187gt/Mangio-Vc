@@ -1647,15 +1647,15 @@ with gr.Blocks(theme=gr.themes.Soft(), title='Mangio-RVC-Web 💻') as app:
                             visible=False,
                         )
                         
-                        f0method0.change(
+                        f0method8.change(
                             fn=lambda radio: (
                                 {
                                     "visible": radio in ['mangio-crepe', 'mangio-crepe-tiny'],
                                     "__type__": "update"
                                 }
                             ),
-                            inputs=[f0method0],
-                            outputs=[crepe_hop_length]
+                            inputs=[f0method8],
+                            outputs=[extraction_crepe_hop_length]
                         )
                     but2 = gr.Button(i18n("特征提取"), variant="primary")
                     info2 = gr.Textbox(label=i18n("输出信息"), value="", max_lines=8, interactive=False)
