@@ -471,8 +471,8 @@ def update_fshift_presets(preset, qfrency, tmbre):
 
 def preprocess_dataset(trainset_dir, exp_dir, sr, n_p):
     sr = sr_dict[sr]
-    log_dir = os.path.join(now_dir, "logs", exp_dir)
-    log_file = os.path.join(log_dir, "preprocess.log")
+    log_dir = f"{now_dir}\\logs\\{exp_dir}"
+    log_file = f"{log_dir}\\preprocess.log"
 
     os.makedirs(log_dir, exist_ok=True)
 
