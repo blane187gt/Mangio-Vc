@@ -1,13 +1,12 @@
-# 7/29 Changelog:
+# 8/1 Changelog
 - Completely rewrote the code for `infer-web.py` to be more optimized.
-- Added minor optimizations in `my_utils.py`.
-- Due to all that, inferencing may be faster, and training is also potentially faster.
+- Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough.
+- Due to all that, inferencing seems to be faster, and training is also potentially faster.
 - The launch speed is increased due to lazy importing heavy modules and libraries.
 - Revoked from using **SQL** databases back to **CSV** data storage for less trouble on colab.
 
 # 7/28 Changelog:
-- Undo SQL change for the sake of stability, uses csv now
-- Merging checkpoints bug has been resolved
+- Merging checkpoints bug has been resolved.
 
 # 7/26 Changelog:
 - Fixed the cli inferencing traceback.
@@ -28,7 +27,7 @@
 - Unnecessary radios have been replaced with checkboxes.
 
 # 7/22 Changelog:
-- Experimental Formant Shift using StftPitchShift(tried using praat with praatio but to no avail)
+- Experimental Formant Shift using StftPitchShift (tried using praat with praatio but to no avail)
 - Added `Stop Training` button when training, no need to restart RVC every time you want to stop the training of a model!
 - Auto-detect Index path for models selected + Auto-detect paths, no more default values like this: `E:\codes\py39\vits_vc_gpu_train\logs\mi-test-1key\total_fea.npy`, We're getting Root Dir and subfolders using 
 ```python 
