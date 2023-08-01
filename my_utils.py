@@ -108,3 +108,28 @@ def load_audio(file, sr, DoFormant, Quefrency, Timbre):
         converted = False
     
     return np.frombuffer(out, np.float32).flatten()
+
+
+def check_audio_duration(file):
+    try:
+        # Strip whitespaces and unnecessary characters from the file name
+        file = file.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
+
+        # Probe the audio file for information
+        probe = ffmpeg.probe(file)
+
+        # Extract the duration from the probe result
+        duration = float(probe['streams'][0]['duration'])
+
+        # If the duration is less than 0.75 seconds, print the message and exit the loop
+        if duration < 0.76:
+            print(
+                f"\n------------\n"
+                f"Audio file, {file.split('/')[-1]}, under ~0.76s detected - file is too short. Target at least 1-2s for best results."
+                f"\n------------\n\n"
+            )
+            return False
+
+        return True
+    except Exception as e:
+        raise RuntimeError(f"Failed to check audio duration: {e}")

@@ -47,7 +47,7 @@ def main(model_name, save_freq, lastmdls):
     tfile = os.path.join(tensordir, latest_file)
     
     ea = event_accumulator.EventAccumulator(tfile,
-        size_guidance={ # see below regarding this argument
+        size_guidance={
         event_accumulator.COMPRESSED_HISTOGRAMS: 500,
         event_accumulator.IMAGES: 4,
         event_accumulator.AUDIO: 4,
