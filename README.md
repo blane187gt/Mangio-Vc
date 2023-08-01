@@ -1,12 +1,13 @@
 # 8/1 Changelog
 - Completely rewrote the code for `infer-web.py` to be more optimized.
-- Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough.
-- Due to all that, inferencing seems to be faster, and training is also potentially faster.
+- Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough to train with (0.76s)
+- Due to optimization, inferencing seems to be decently faster, while training seems to be marginally faster.
 - The launch speed is increased due to lazy importing heavy modules and libraries.
-- Revoked from using **SQL** databases back to **CSV** data storage for less trouble on colab.
+- Requirements.txt builds properly on non-windows again + plus fixed a versioning conflict with protobuf
 
 # 7/28 Changelog:
 - Merging checkpoints bug has been resolved.
+- Revoked from using **SQL** databases back to **CSV** data storage for less trouble on colab.
 
 # 7/26 Changelog:
 - Fixed the cli inferencing traceback.
