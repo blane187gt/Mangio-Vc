@@ -1,6 +1,13 @@
+# 8/1 Changelog
+- Completely rewrote the code for `infer-web.py` to be more optimized.
+- Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough to train with (0.76s)
+- Due to optimization, inferencing seems to be decently faster, while training seems to be marginally faster.
+- The launch speed is increased due to lazy importing heavy modules and libraries.
+- Requirements.txt builds properly on non-windows again + plus fixed a versioning conflict with protobuf
+
 # 7/28 Changelog:
-- Undo SQL change for the sake of stability, uses csv now
-- Merging checkpoints bug has been resolved
+- Merging checkpoints bug has been resolved.
+- Revoked from using **SQL** databases back to **CSV** data storage for less trouble on colab.
 
 # 7/26 Changelog:
 - Fixed the cli inferencing traceback.
@@ -21,7 +28,7 @@
 - Unnecessary radios have been replaced with checkboxes.
 
 # 7/22 Changelog:
-- Experimental Formant Shift using StftPitchShift(tried using praat with praatio but to no avail)
+- Experimental Formant Shift using StftPitchShift (tried using praat with praatio but to no avail)
 - Added `Stop Training` button when training, no need to restart RVC every time you want to stop the training of a model!
 - Auto-detect Index path for models selected + Auto-detect paths, no more default values like this: `E:\codes\py39\vits_vc_gpu_train\logs\mi-test-1key\total_fea.npy`, We're getting Root Dir and subfolders using 
 ```python 
@@ -272,7 +279,7 @@ You are currently in 'INFER':
     arg 12) feature index ratio: 0.78 (0-1)
     arg 13) Voiceless Consonant Protection (Less Artifact): 0.33 (Smaller number = more protection. 0.50 means Dont Use.)
 
-Example: mi-test.pth saudio/Sidney.wav myTest.wav logs/mi-test/added_index.index 0 -2 harvest 160 3 0 1 0.95 0.33
+Example: mi-test.pth saudio/Sidney.wav myTest.wav logs/mi-test/added_index.index 0 -2 harvest 160 3 0 1 0.95 0.33 0.45 True 8.0 1.2
 
 INFER: <INSERT ARGUMENTS HERE OR COPY AND PASTE THE EXAMPLE>
 ```
