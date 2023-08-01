@@ -467,8 +467,10 @@ def update_fshift_presets(preset, qfrency, tmbre):
 def preprocess_dataset(trainset_dir, exp_dir, sr, n_p):
     sr = sr_dict[sr]
     
-    log_dir = os.path.join(now_dir, "logs", exp_dir)
+    tmpdir = os.path.join(now_dir, "logs", exp_dir).split("/")
+    log_dir = os.path.join(*tmpdir, "logs", exp_dir)
     log_file = os.path.join(log_dir, "preprocess.log")
+    
 
     os.makedirs(log_dir, exist_ok=True)
 
@@ -635,18 +637,18 @@ def click_train(
     if_save_every_weights18,
     version19,
 ):
+    
+    
     CSVutil('csvdb/stop.csv', 'w+', 'formanting', False)
 
-    log_dir = f"%s\\logs\\%s" % (
-        now_dir, exp_dir1
-    )
+    log_dir = os.path.join(now_dir, "logs", exp_dir1)
+    
     os.makedirs(log_dir, exist_ok=True)
 
-    gt_wavs_dir = f"%s\\0_gt_wavs" % (log_dir)
+    gt_wavs_dir = os.path.join(log_dir, "0_gt_wavs")
     feature_dim = "256" if version19 == "v1" else "768"
-    feature_dir = f"%s\\3_feature%s" % (
-        log_dir, feature_dim
-    )
+
+    feature_dir = os.path.join(log_dir, "3_feature", feature_dim)
 
     log_interval = set_log_interval(log_dir, batch_size12)
 
