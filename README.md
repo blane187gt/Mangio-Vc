@@ -1,4 +1,4 @@
-# 8/1 Changelog
+# 8/1 Changelog:
 - Completely rewrote the code for `infer-web.py` to be more optimized.
 - Added minor optimizations in `my_utils.py`, as well as a new function to gauge if a file is long enough to train with (0.76s)
 - Due to optimization, inferencing seems to be decently faster, while training seems to be marginally faster.
