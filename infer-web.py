@@ -31,7 +31,6 @@ from subprocess import Popen
 gr = lazyload("gradio")
 SF = lazyload("soundfile")
 SFWrite = SF.write
-import onnx
 from config import Config
 from fairseq import checkpoint_utils
 from i18n import I18nAuto
@@ -51,7 +50,6 @@ from sklearn.cluster import MiniBatchKMeans
 
 import time
 import threading
-from safetensors.torch import load_file
 
 from numba import jit
 
