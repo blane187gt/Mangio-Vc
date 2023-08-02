@@ -50,7 +50,6 @@ from sklearn.cluster import MiniBatchKMeans
 
 import time
 import threading
-from safetensors.torch import load_file
 
 from numba import jit
 
