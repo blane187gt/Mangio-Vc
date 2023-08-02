@@ -31,7 +31,6 @@ from subprocess import Popen
 gr = lazyload("gradio")
 SF = lazyload("soundfile")
 SFWrite = SF.write
-import onnx
 from config import Config
 from fairseq import checkpoint_utils
 from i18n import I18nAuto
