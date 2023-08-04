@@ -224,6 +224,16 @@ class VC(object):
                 if filter_radius > 2:
                     f0 = signal.medfilt(f0, 3)
                 f0 = f0[1:]  # Get rid of first frame.
+            elif method == "rmvpe":
+                if hasattr(self, "model_rmvpe") == False:
+                    from rmvpe import RMVPE
+
+                    print("loading rmvpe model")
+                    self.model_rmvpe = RMVPE(
+                        "rmvpe.pt", is_half=self.is_half, device=self.device
+                    )
+                f0 = self.model_rmvpe.infer_from_audio(x, thred=0.03)
+                f0 = f0[1:]  # Get rid of first frame.
             elif method == "dio":  # Potentially buggy?
                 f0, t = pyworld.dio(
                     x.astype(np.double),
