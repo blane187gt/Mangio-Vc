@@ -158,7 +158,7 @@ class Config:
         parser.add_argument(
             "--output_file_name",
             type=str,
-            default="PLACEHOLDER",
+            default="output.wav",
             help="Output file name to be placed in './audio-outputs'",
         )
         parser.add_argument(
