@@ -1,19 +1,73 @@
 import argparse
 import sys
 import torch
+import json
 from multiprocessing import cpu_count
+
+global usefp16
+usefp16 = False
 
 
 def use_fp32_config():
-    for config_file in ["32k.json", "40k.json", "48k.json"]:
-        with open(f"configs/{config_file}", "r") as f:
-            strr = f.read().replace("true", "false")
-        with open(f"configs/{config_file}", "w") as f:
-            f.write(strr)
-    with open("trainset_preprocess_pipeline_print.py", "r") as f:
-        strr = f.read().replace("3.7", "3.0")
-    with open("trainset_preprocess_pipeline_print.py", "w") as f:
-        f.write(strr)
+    usefp16 = False
+    device_capability = 0
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")  # Assuming you have only one GPU (index 0).
+        device_capability = torch.cuda.get_device_capability(device)[0]
+        if device_capability >= 7:
+            usefp16 = True
+            for config_file in ["32k.json", "40k.json", "48k.json"]:
+                with open(f"configs/{config_file}", "r") as d:
+                    data = json.load(d)
+
+                if "train" in data and "fp16_run" in data["train"]:
+                    data["train"]["fp16_run"] = True
+
+                with open(f"configs/{config_file}", "w") as d:
+                    json.dump(data, d, indent=4)
+
+                print(f"Set fp16_run to true in {config_file}")
+
+            with open(
+                "trainset_preprocess_pipeline_print.py", "r", encoding="utf-8"
+            ) as f:
+                strr = f.read()
+
+            strr = strr.replace("3.0", "3.7")
+
+            with open(
+                "trainset_preprocess_pipeline_print.py", "w", encoding="utf-8"
+            ) as f:
+                f.write(strr)
+        else:
+            for config_file in ["32k.json", "40k.json", "48k.json"]:
+                with open(f"configs/{config_file}", "r") as f:
+                    data = json.load(f)
+
+                if "train" in data and "fp16_run" in data["train"]:
+                    data["train"]["fp16_run"] = False
+
+                with open(f"configs/{config_file}", "w") as d:
+                    json.dump(data, d, indent=4)
+
+                print(f"Set fp16_run to false in {config_file}")
+
+            with open(
+                "trainset_preprocess_pipeline_print.py", "r", encoding="utf-8"
+            ) as f:
+                strr = f.read()
+
+            strr = strr.replace("3.7", "3.0")
+
+            with open(
+                "trainset_preprocess_pipeline_print.py", "w", encoding="utf-8"
+            ) as f:
+                f.write(strr)
+    else:
+        print(
+            "CUDA is not available. Make sure you have an NVIDIA GPU and CUDA installed."
+        )
+    return (usefp16, device_capability)
 
 
 class Config:
@@ -53,11 +107,15 @@ class Config:
             action="store_true",
             help="Do not open in browser automatically",
         )
-        parser.add_argument( # Fork Feature. Paperspace integration for web UI
-            "--paperspace", action="store_true", help="Note that this argument just shares a gradio link for the web UI. Thus can be used on other non-local CLI systems."
+        parser.add_argument(  # Fork Feature. Paperspace integration for web UI
+            "--paperspace",
+            action="store_true",
+            help="Note that this argument just shares a gradio link for the web UI. Thus can be used on other non-local CLI systems.",
         )
-        parser.add_argument( # Fork Feature. Embed a CLI into the infer-web.py
-            "--is_cli", action="store_true", help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!"
+        parser.add_argument(  # Fork Feature. Embed a CLI into the infer-web.py
+            "--is_cli",
+            action="store_true",
+            help="Use the CLI instead of setting up a gradio UI. This flag will launch an RVC text interface where you can execute functions from infer-web.py!",
         )
         parser.add_argument( # Fork Feature. Embed a CLI into the infer-web.py
             "--simple_cli", choices=["infer", "pre-process", "extract-feature", "train", "train-feature", "extract-model", "uvr", ""], default="", help="Use the simpler CLI instead of the cli interface. Choose from 1) pre-process 2) extract-feature 3)  WIP."
@@ -90,7 +148,7 @@ class Config:
         )
         parser.add_argument(
             "--f0_method",
-            choices=["pm", "harvest", "dio", "crepe"],
+            type=str,
             default="crepe",
             help="F0 extraction method",
         )
@@ -306,9 +364,9 @@ class Config:
             ):
                 print("Found GPU", self.gpu_name, ", force to fp32")
                 self.is_half = False
-                use_fp32_config()
             else:
                 print("Found GPU", self.gpu_name)
+                use_fp32_config()
             self.gpu_mem = int(
                 torch.cuda.get_device_properties(i_device).total_memory
                 / 1024
