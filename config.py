@@ -309,7 +309,23 @@ class Config:
             default="",
             help="UVR5 weight name",
         )
-
+        parser.add_argument(
+            "--formant_shift",
+            action="store_true",
+            help="Whether to formant shift the inference audio before conversion: False (if set to false, you can ignore setting the quefrency and timbre values for formanting)",
+        )
+        parser.add_argument(
+            "--formant_quefrency",
+            type=float,
+            default=8.0,
+            help="Quefrency for formanting: 8.0 (no need to set if arg14 is False/false)",
+        )
+        parser.add_argument(
+            "--formant_timbre",
+            type=float,
+            default=1.2,
+            help="Timbre for formanting: 1.2 (no need to set if arg14 is False/false)",
+        )
 
         cmd_opts = parser.parse_args()
 
@@ -322,7 +338,8 @@ class Config:
                   'harvest_median_filter_radius', 'post_sample_rate',
                   'mix_volume_envelope', 'feature_index_ratio',
                   'voiceless_consonant_protection', 'model_path', 
-                  'model_save_name', 'model_info', 'cmd_help', 'agg', 'format', 'uvr5_weight_name']
+                  'model_save_name', 'model_info', 'cmd_help', 'agg', 'format', 'uvr5_weight_name',
+                  'formant_shift', 'formant_quefrency', 'formant_timbre']
         simple_cli_args = argparse.Namespace(**{arg: getattr(cmd_opts, arg) for arg in args_to_assign})
 
         cmd_opts.port = cmd_opts.port if 0 <= cmd_opts.port <= 65535 else 7865
