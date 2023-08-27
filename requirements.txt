@@ -32,7 +32,7 @@ executing==1.2.0
 fairseq==0.12.2
 faiss-cpu==1.7.2
 fastapi==0.88.0
-ffmpeg-python==0.2.0
+ffmpeg-python==0.1.18
 ffmpy==0.3.1
 filelock==3.10.0
 flatbuffers==23.5.9
