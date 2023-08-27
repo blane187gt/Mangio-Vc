@@ -39,7 +39,7 @@ from lib.infer_pack.models import (
 from lib.infer_pack.models_onnx import SynthesizerTrnMsNSFsidM
 from infer_uvr5 import _audio_pre_, _audio_pre_new
 from MDXNet import MDXNetDereverb
-from my_utils import load_audio, CSVutil
+from my_utils import load_audio, CSVutil, get_folder_name
 from train.process_ckpt import change_info, extract_small_model, merge, show_info
 from vc_infer_pipeline import VC
 from sklearn.cluster import MiniBatchKMeans
@@ -157,6 +157,8 @@ def load_hubert():
 
 weight_root = "weights"
 weight_uvr5_root = "uvr5_weights"
+uvr5_vocal_root = os.path.join("uvr5_outputs", "vocal")
+uvr5_inst_root = os.path.join("uvr5_outputs", "inst")
 index_root = "./logs/"
 audio_root = "audios"
 names = []
@@ -402,6 +404,7 @@ def vc_multi(
             yield "\n".join(infos)
         yield "\n".join(infos)
     except:
+        traceback.print_exc()
         yield traceback.format_exc()
 
 
@@ -426,11 +429,13 @@ def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format
                 is_half=config.is_half,
             )
         if inp_root != "":
-            paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
+            if os.path.isdir(inp_root):
+                paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
+            else:
+                paths = [inp_root]
         else:
-            paths = [path.name for path in paths]
-        for path in paths:
-            inp_path = os.path.join(inp_root, path)
+            paths = [os.path.join(inp_root, path.name) for path in paths]
+        for inp_path in paths:
             need_reformat = 1
             done = 0
             try:
@@ -1547,6 +1552,7 @@ def execute_generator_function(genObject):
 def cli_infer(com):
     # get VC first
     com = cli_split_command(com)
+    print(com)
     model_name = com[0]
     source_audio_path = com[1]
     output_file_name = com[2]
@@ -1565,14 +1571,13 @@ def cli_infer(com):
     protection_amnt = float(com[12])
     protect1 = 0.5
 
-    if com[14] == "False" or com[14] == "false":
+    if com[14] == "False" or com[14] == "false" or com[14] == False:
         DoFormant = False
         Quefrency = 0.0
         Timbre = 0.0
         CSVutil(
             "csvdb/formanting.csv", "w+", "formanting", DoFormant, Quefrency, Timbre
         )
-
     else:
         DoFormant = True
         Quefrency = float(com[15])
@@ -1585,39 +1590,61 @@ def cli_infer(com):
     vc_data = get_vc(model_name, protection_amnt, protect1)
     print(vc_data)
     print("Mangio-RVC-Fork Infer-CLI: Performing inference...")
-    conversion_data = vc_single(
-        speaker_id,
-        source_audio_path,
-        source_audio_path,
-        transposition,
-        f0_file,
-        f0_method,
-        feature_index_path,
-        feature_index_path,
-        feature_ratio,
-        harvest_median_filter,
-        resample,
-        mix,
-        protection_amnt,
-        crepe_hop_length,
-    )
-    if "Success." in conversion_data[0]:
-        print(
-            "Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s/%s..."
-            % ("audio-outputs", output_file_name)
-        )
-        wavfile.write(
-            "%s/%s" % ("audio-outputs", output_file_name),
-            conversion_data[1][0],
-            conversion_data[1][1],
-        )
-        print(
-            "Mangio-RVC-Fork Infer-CLI: Finished! Saved output to %s/%s"
-            % ("audio-outputs", output_file_name)
-        )
+    # Check if source_audio_path is a folder, if so, use vc_multi instead.
+    if os.path.isdir(source_audio_path):
+        opt_root = os.path.abspath("multi-audio-outputs/")
+        # Get the folder name of source_audio_path
+        source_audio_path_folder_name = get_folder_name(source_audio_path)
+        opt_root = os.path.join(opt_root, source_audio_path_folder_name)
+        os.makedirs(opt_root, exist_ok=True)
+        for res in vc_multi(
+            sid=speaker_id,
+            dir_path=source_audio_path,
+            opt_root=opt_root,
+            paths=None,
+            f0_up_key=transposition,
+            f0_method=f0_method,
+            file_index=feature_index_path,
+            file_index2=feature_index_path,
+            index_rate=feature_ratio,
+            filter_radius=harvest_median_filter,
+            resample_sr=resample,
+            rms_mix_rate=mix,
+            protect=protection_amnt,
+            format1="flac",
+            crepe_hop_length=crepe_hop_length,
+        ):
+            if "Success." in res:
+                print("Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s" % opt_root)
+            else:
+                print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
+                print(res)
     else:
-        print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
-        print(conversion_data[0])
+        print("Mangio-RVC-Fork Infer-CLI: Detected file. Using vc_single...")
+        conversion_data = vc_single(
+            sid=speaker_id,
+            input_audio_path0=source_audio_path,
+            input_audio_path1=None,
+            f0_up_key=transposition,
+            f0_file=f0_file,
+            f0_method=f0_method,
+            file_index=feature_index_path,
+            file_index2=feature_index_path,
+            index_rate=feature_ratio,
+            filter_radius=harvest_median_filter,
+            resample_sr=resample,
+            rms_mix_rate=mix,
+            protect=protection_amnt,
+            crepe_hop_length=crepe_hop_length,
+        )
+
+        if "Success." in conversion_data[0]:
+            print("Mangio-RVC-Fork Infer-CLI: Inference succeeded. Writing to %s/%s..." % ('audio-outputs', output_file_name))
+            wavfile.write('%s/%s' % ('audio-outputs', output_file_name), conversion_data[1][0], conversion_data[1][1])
+            print("Mangio-RVC-Fork Infer-CLI: Finished! Saved output to %s/%s" % ('audio-outputs', output_file_name))
+        else:
+            print("Mangio-RVC-Fork Infer-CLI: Inference failed. Here's the traceback: ")
+            print(conversion_data[0])
 
 
 def cli_pre_process(com):
@@ -1718,6 +1745,7 @@ def cli_extract_model(com):
     has_pitch_guidance = com[3]
     info = com[4]
     version = com[5]
+    # FIXME: Line 72. `opt["weight"][key] = ckpt[key].half() -> 'dict' object has no attribute 'half'`
     extract_small_model_process = extract_small_model(
         model_path, save_name, sample_rate, has_pitch_guidance, info, version
     )
@@ -1741,6 +1769,23 @@ def preset_apply(preset, qfer, tmbr):
         {"value": tmbr, "__type__": "update"},
     )
 
+
+def cli_uvr(com):
+    com = cli_split_command(com)
+    print("Mangio-RVC-Fork UVR: Starting... Please wait")
+    for res in uvr(
+        model_name=com[0],
+        inp_root=com[1],
+        save_root_vocal=uvr5_vocal_root,
+        paths=None,
+        save_root_ins=uvr5_inst_root,
+        agg=com[2],
+        format0=com[3],
+    ):
+        if "Success" in res:
+            print("Mangio-RVC-Fork UVR: Success!")
+        else:
+            print(f"Mangio-RVC-Fork UVR: Failed! Please check: {res}")
 
 def print_page_details():
     if cli_current_page == "HOME":
@@ -1884,7 +1929,101 @@ if config.is_cli:
     )
     cli_navigation_loop()
 
-# endregion
+#endregion
+
+#region Simple CLI App
+
+def simple_cli_main():
+    print(f"You're now in {config.simple_cli} mode.")
+    command = ""
+    func = None
+    if config.simple_cli and config.simple_cli_args.cmd_help:
+        # TODO: Add help and example for each command
+        print(f"Help for {config.simple_cli} command: WIP\n")
+        return
+    if config.simple_cli == "infer":
+        # FIXME: The 13th argument is not clear.
+        command = f"{config.simple_cli_args.model_file_name} \
+                    {config.simple_cli_args.source_audio_path} \
+                    {config.simple_cli_args.output_file_name} \
+                    {config.simple_cli_args.feature_index_path} \
+                    {config.simple_cli_args.speaker_id} \
+                    {config.simple_cli_args.transposition} \
+                    {config.simple_cli_args.infer_f0_method} \
+                    {config.simple_cli_args.crepe_hop_length} \
+                    {config.simple_cli_args.harvest_median_filter_radius} \
+                    {config.simple_cli_args.post_sample_rate} \
+                    {config.simple_cli_args.mix_volume_envelope} \
+                    {config.simple_cli_args.feature_index_ratio} \
+                    {config.simple_cli_args.voiceless_consonant_protection} \
+                    0.45 \
+                    {config.simple_cli_args.formant_shift} \
+                    {config.simple_cli_args.formant_quefrency} \
+                    {config.simple_cli_args.formant_timbre}"
+        func = cli_infer
+    elif config.simple_cli == "pre-process":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.trainset_dir} \
+                    {config.simple_cli_args.sample_rate} \
+                    {config.simple_cli_args.n_workers}"
+        func = cli_pre_process
+    elif config.simple_cli == "extract-feature":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.gpu} \
+                    {config.simple_cli_args.n_workers} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.f0_method} \
+                    {config.simple_cli_args.crepe_hop_length} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_extract_feature
+    elif config.simple_cli == "train":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.sample_rate} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.speaker_id} \
+                    {config.simple_cli_args.save_epoch_iter} \
+                    {config.simple_cli_args.epochs} \
+                    {config.simple_cli_args.batch_size} \
+                    {config.simple_cli_args.gpu} \
+                    {int(config.simple_cli_args.latest_ckpt_only)} \
+                    {int(config.simple_cli_args.cache_trainset)} \
+                    {int(config.simple_cli_args.save_small_model)} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_train
+    elif config.simple_cli == "train-feature":
+        command = f"{config.simple_cli_args.exp_name} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_train_feature
+    elif config.simple_cli == "extract-model":
+        command = f"{config.simple_cli_args.model_path} \
+                    {config.simple_cli_args.model_save_name} \
+                    {config.simple_cli_args.sample_rate} \
+                    {int(config.simple_cli_args.is_pitch_guidance)} \
+                    {config.simple_cli_args.model_info} \
+                    {config.simple_cli_args.rvc_version}"
+        func = cli_extract_model
+    elif config.simple_cli == "uvr":
+        command = f"{config.simple_cli_args.uvr5_weight_name} \
+                    {config.simple_cli_args.source_audio_path} \
+                    {config.simple_cli_args.agg} \
+                    {config.simple_cli_args.format}"
+        func = cli_uvr
+    else:
+        raise Exception("Unknown simple cli mode: %s" % config.simple_cli)
+    
+    if command == "":
+        raise Exception("Fatal Error. Command is empty.")
+    if func == None:
+        raise Exception("Fatal Error. Function is empty.")
+    
+    func(command)
+
+if(config.simple_cli != ""):
+    print("Hi! It's simple cli here.")
+    simple_cli_main()
+    sys.exit(0)
+
+#endregion
 
 # region RVC WebUI App
 
