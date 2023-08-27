@@ -233,7 +233,7 @@ class Config:
         )
         parser.add_argument(
             "--infer_f0_method",
-            choices=["pm", "harvest", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "rmvpe"],
+            type=str,
             default="crepe",
             help="F0 extraction method for inference",
         )
