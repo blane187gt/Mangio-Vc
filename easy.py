@@ -303,85 +303,6 @@ def vc_multi(
         yield traceback.format_exc()
 
 
-def uvr(model_name, inp_root, save_root_vocal, paths, save_root_ins, agg, format0):
-    infos = []
-    try:
-        inp_root = inp_root.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        save_root_vocal = (
-            save_root_vocal.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        )
-        save_root_ins = (
-            save_root_ins.strip(" ").strip('"').strip("\n").strip('"').strip(" ")
-        )
-        if model_name == "onnx_dereverb_By_FoxJoy":
-            pre_fun = MDXNetDereverb(15)
-        else:
-            func = _audio_pre_ if "DeEcho" not in model_name else _audio_pre_new
-            pre_fun = func(
-                agg=int(agg),
-                model_path=os.path.join(weight_uvr5_root, model_name + ".pth"),
-                device=config.device,
-                is_half=config.is_half,
-            )
-        if inp_root != "":
-            paths = [os.path.join(inp_root, name) for name in os.listdir(inp_root)]
-        else:
-            paths = [path.name for path in paths]
-        for path in paths:
-            inp_path = os.path.join(inp_root, path)
-            need_reformat = 1
-            done = 0
-            try:
-                info = ffmpeg.probe(inp_path, cmd="ffprobe")
-                if (
-                    info["streams"][0]["channels"] == 2
-                    and info["streams"][0]["sample_rate"] == "44100"
-                ):
-                    need_reformat = 0
-                    pre_fun._path_audio_(
-                        inp_path, save_root_ins, save_root_vocal, format0
-                    )
-                    done = 1
-            except:
-                need_reformat = 1
-                traceback.print_exc()
-            if need_reformat == 1:
-                tmp_path = "%s/%s.reformatted.wav" % (tmp, os.path.basename(inp_path))
-                os.system(
-                    "ffmpeg -i %s -vn -acodec pcm_s16le -ac 2 -ar 44100 %s -y"
-                    % (inp_path, tmp_path)
-                )
-                inp_path = tmp_path
-            try:
-                if done == 0:
-                    pre_fun._path_audio_(
-                        inp_path, save_root_ins, save_root_vocal, format0
-                    )
-                infos.append("%s->Success" % (os.path.basename(inp_path)))
-                yield "\n".join(infos)
-            except:
-                infos.append(
-                    "%s->%s" % (os.path.basename(inp_path), traceback.format_exc())
-                )
-                yield "\n".join(infos)
-    except:
-        infos.append(traceback.format_exc())
-        yield "\n".join(infos)
-    finally:
-        try:
-            if model_name == "onnx_dereverb_By_FoxJoy":
-                del pre_fun.pred.model
-                del pre_fun.pred.model_
-            else:
-                del pre_fun.model
-                del pre_fun
-        except:
-            traceback.print_exc()
-        print("clean_empty_cache")
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    yield "\n".join(infos)
-
 
 # 一个选项卡全局只能有一个音色
 def get_vc(sid):
@@ -1122,57 +1043,6 @@ def change_info_(ckpt_path):
         return {"__type__": "update"}, {"__type__": "update"}, {"__type__": "update"}
 
 
-from infer_pack.models_onnx import SynthesizerTrnMsNSFsidM
-
-
-def export_onnx(ModelPath, ExportedPath, MoeVS=True):
-    cpt = torch.load(ModelPath, map_location="cpu")
-    cpt["config"][-3] = cpt["weight"]["emb_g.weight"].shape[0]  # n_spk
-    hidden_channels = 256 if cpt.get("version","v1")=="v1"else 768#cpt["config"][-2]  # hidden_channels，为768Vec做准备
-
-    test_phone = torch.rand(1, 200, hidden_channels)  # hidden unit
-    test_phone_lengths = torch.tensor([200]).long()  # hidden unit 长度（貌似没啥用）
-    test_pitch = torch.randint(size=(1, 200), low=5, high=255)  # 基频（单位赫兹）
-    test_pitchf = torch.rand(1, 200)  # nsf基频
-    test_ds = torch.LongTensor([0])  # 说话人ID
-    test_rnd = torch.rand(1, 192, 200)  # 噪声（加入随机因子）
-
-    device = "cpu"  # 导出时设备（不影响使用模型）
-
-
-    net_g = SynthesizerTrnMsNSFsidM(
-        *cpt["config"], is_half=False,version=cpt.get("version","v1")
-    )  # fp32导出（C++要支持fp16必须手动将内存重新排列所以暂时不用fp16）
-    net_g.load_state_dict(cpt["weight"], strict=False)
-    input_names = ["phone", "phone_lengths", "pitch", "pitchf", "ds", "rnd"]
-    output_names = [
-        "audio",
-    ]
-    # net_g.construct_spkmixmap(n_speaker) 多角色混合轨道导出
-    torch.onnx.export(
-        net_g,
-        (
-            test_phone.to(device),
-            test_phone_lengths.to(device),
-            test_pitch.to(device),
-            test_pitchf.to(device),
-            test_ds.to(device),
-            test_rnd.to(device),
-        ),
-        ExportedPath,
-        dynamic_axes={
-            "phone": [1],
-            "pitch": [1],
-            "pitchf": [1],
-            "rnd": [2],
-        },
-        do_constant_folding=False,
-        opset_version=16,
-        verbose=False,
-        input_names=input_names,
-        output_names=output_names,
-    )
-    return "Finished"
 
 
 #region Mangio-RVC-Fork CLI App
@@ -1501,7 +1371,7 @@ def get_index():
     if check_for_name() != '':
         if config.iscolab:
             chosen_model=sorted(names)[0].split(".")[0]
-            logs_path="/content/Retrieval-based-Voice-Conversion-WebUI/logs/"+chosen_model
+            logs_path="/content/rvc/logs/"+chosen_model
             if os.path.exists(logs_path):
                 for file in os.listdir(logs_path):
                     if file.endswith(".index"):
@@ -1513,7 +1383,7 @@ def get_index():
 def get_indexes():
     indexes_list=[]
     if config.iscolab:
-        for dirpath, dirnames, filenames in os.walk("/content/Retrieval-based-Voice-Conversion-WebUI/logs/"):
+        for dirpath, dirnames, filenames in os.walk("/content/rvc/logs/"):
             for filename in filenames:
                 if filename.endswith(".index"):
                     indexes_list.append(os.path.join(dirpath,filename))
@@ -1634,7 +1504,7 @@ def elevenTTS(xiapi, text, id):
         aud_path = save_to_wav('./temp_gTTS.mp3')
         return aud_path, aud_path
         
-with gr.Blocks(theme=gr.themes.Base()) as app:
+with gr.Blocks(theme="Blane187/fuchsia") as app:
     with gr.Tabs():
         with gr.TabItem("Inference"):
             gr.HTML("<h1> Easy GUI v2 (rejekts) - adapted to Mangio-RVC-Fork 💻 </h1>")
@@ -1661,13 +1531,13 @@ with gr.Blocks(theme=gr.themes.Base()) as app:
                     label=i18n("请选择说话人id"),
                     value=0,
                     visible=False,
-                    interactive=True,
+                    interactive=False,
                 )
                 #clean_button.click(fn=clean, inputs=[], outputs=[sid0])
                 sid0.change(
                     fn=get_vc,
                     inputs=[sid0],
-                    outputs=[spk_item],
+                    outputs=[],
                 )
                 but0 = gr.Button("Convert", variant="primary")
             with gr.Row():
@@ -1726,9 +1596,9 @@ with gr.Blocks(theme=gr.themes.Base()) as app:
                             )
                     vc_output2 = gr.Audio(label="Output Audio (Click on the Three Dots in the Right Corner to Download)")
                     f0method0 = gr.Radio(
-                            label="Optional: Change the Pitch Extraction Algorithm. Use PM for fast results or Harvest for better low range (slower results) or Crepe for the best of both worlds.",
-                            choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny"], # Fork Feature. Add Crepe-Tiny
-                            value="pm",
+                            label="Optional: Change the Pitch Extraction Algorithm. Use PM for fast results or Harvest for better low range (slower results) or Crepe for the best of both worlds, u can aslo use Hybrid and fcpe.",
+                            choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "fcpe", " rmvpe_legacy", "hybrid[rmvpe+fcpe]","hybrid[rmvpe+fcpe+rmvpe_legacy]"], # Fork Feature. Add Crepe-Tiny
+                            value="rmvpe",
                             interactive=True,
                         )
                     with gr.Accordion("More", open=False):
@@ -1808,8 +1678,8 @@ with gr.Blocks(theme=gr.themes.Base()) as app:
                             label=i18n(
                                 "选择音高提取算法,输入歌声可用pm提速,harvest低音好但巨慢无比,crepe效果好但吃GPU"
                             ),
-                            choices=["pm", "harvest", "crepe"],
-                            value="pm",
+                            choices=["pm", "harvest", "dio", "crepe", "crepe-tiny", "mangio-crepe", "mangio-crepe-tiny", "fcpe", " rmvpe_legacy", "hybrid[rmvpe+fcpe]","hybrid[rmvpe+fcpe+rmvpe_legacy]"], # Fork Feature. Add Crepe-Tiny
+                            value="rmvpe",
                             interactive=True,
                         )
                         filter_radius1 = gr.Slider(
