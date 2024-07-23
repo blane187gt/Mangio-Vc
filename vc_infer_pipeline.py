@@ -7,6 +7,8 @@ import scipy.signal as signal
 import pyworld, os, traceback, faiss, librosa, torchcrepe
 from scipy import signal
 from functools import lru_cache
+import gc, re
+
 
 now_dir = os.getcwd()
 sys.path.append(now_dir)
@@ -330,6 +332,27 @@ class VC(object):
                     "rmvpe.pt", is_half=self.is_half, device=self.device
                 )
             f0 = self.model_rmvpe.infer_from_audio(x, thred=0.03)
+        elif f0_method == "rmvpe_legacy":
+            params = {'x': x, 'p_len': p_len, 'f0_up_key': f0_up_key, 'f0_min': f0_min, 
+                      'f0_max': f0_max, 'time_step': time_step, 'filter_radius': filter_radius, 
+                      'crepe_hop_length': crepe_hop_length, 'model': "full"
+                      }
+            f0 = self.get_pitch_dependant_rmvpe(**params)
+        
+        elif f0_method == "fcpe":
+            from fcpe import FCPEF0Predictor
+            self.model_fcpe = FCPEF0Predictor(
+                os.path.join('assets', 'fcpe', 'fcpe.pt'),
+                f0_min=int(f0_min),
+                f0_max=int(f0_max),
+                dtype=torch.float32,
+                device=self.device,
+                sampling_rate=self.sr,
+                threshold=0.03,
+            )
+            f0 = self.model_fcpe.compute_f0(x, p_len=p_len)
+            del self.model_fcpe
+            gc.collect()
 
         elif "hybrid" in f0_method:
             # Perform hybrid median pitch estimation
