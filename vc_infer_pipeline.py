@@ -8,6 +8,7 @@ import pyworld, os, traceback, faiss, librosa, torchcrepe
 from scipy import signal
 from functools import lru_cache
 import gc, re
+from torchfcpe import spawn_bundled_infer_model
 
 
 now_dir = os.getcwd()
@@ -164,7 +165,21 @@ class VC(object):
         f0, _, _ = librosa.pyin(y, sr=self.sr, fmin=f0_min, fmax=f0_max)
         f0 = f0[1:]  # Get rid of extra first frame
         return f0
+        
+    def get_torchfcpe(self, x, sr, f0_min, f0_max, p_len, *args, **kwargs):
+        self.model_torchfcpe = spawn_bundled_infer_model(device=self.device)
+        f0 = self.model_torchfcpe.infer(
+            torch.from_numpy(x).float().unsqueeze(0).unsqueeze(-1).to(self.device),
+            sr=sr,
+            decoder_mode="local_argmax",
+            threshold=0.006,
+            f0_min=f0_min,
+            f0_max=f0_max,
+            output_interp_target_length=p_len
+        )
+        return f0.squeeze().cpu().numpy()
 
+    
     # Fork Feature: Acquire median hybrid f0 estimation calculation
     def get_f0_hybrid_computation(
         self,
@@ -340,20 +355,8 @@ class VC(object):
             f0 = self.get_pitch_dependant_rmvpe(**params)
         
         elif f0_method == "fcpe":
-            from fcpe import FCPEF0Predictor
-            self.model_fcpe = FCPEF0Predictor(
-                os.path.join('assets', 'fcpe', 'fcpe.pt'),
-                f0_min=int(f0_min),
-                f0_max=int(f0_max),
-                dtype=torch.float32,
-                device=self.device,
-                sampling_rate=self.sr,
-                threshold=0.03,
-            )
-            f0 = self.model_fcpe.compute_f0(x, p_len=p_len)
-            del self.model_fcpe
-            gc.collect()
-
+            from fcpe import fcpe
+            f0 = self.get_torchfcpe(x, self.sr, f0_min, f0_max, p_len)
         elif "hybrid" in f0_method:
             # Perform hybrid median pitch estimation
             input_audio_path2wav[input_audio_path] = x.astype(np.double)
